@@ -175,4 +175,4 @@ end
 
 ---
 
-[ⓘ Вернуться назад](https://github.com/presdes/8-03-hw_pre/README.md)
+[ⓘ Вернуться назад README.md](https://github.com/presdes/8-03-hw_pre/blob/main/README.md)
