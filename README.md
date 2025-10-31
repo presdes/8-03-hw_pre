@@ -12,7 +12,7 @@
 
 Этот подход отражает реальные production-среды 2025 года и обеспечивает лучший опыт для обучения современным DevOps-практикам.
 
-[Более подробное обоснование](https://github.com/presdes/8-03-hw_pre/tree/main/WSL2_Docker_VS_Vagrant.md)
+[ⓘ Более подробное обоснование](https://github.com/presdes/8-03-hw_pre/tree/main/WSL2_Docker_VS_Vagrant.md)
 ---
 
 *Далее следует основное руководство...*
