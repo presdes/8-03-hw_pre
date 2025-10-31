@@ -1,4 +1,4 @@
-# Полное руководство по развертыванию GitLab с GitLab Runner и SonarQube в Docker
+# Ководство по развертыванию GitLab с GitLab Runner и SonarQube в Docker
 
 Мы выбрали **WSL2 + Docker** как современную и эффективную альтернативу Vagrant по ключевым причинам:
 
