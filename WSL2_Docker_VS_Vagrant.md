@@ -1,3 +1,7 @@
+[ⓘ Вернуться назад > README.md](https://github.com/presdes/8-03-hw_pre/blob/main/README.md)
+
+---
+
 ## Обоснование выбора WSL2 + Docker вместо Vagrant
 
 ### Анализ требований и контекста
@@ -175,4 +179,4 @@ end
 
 ---
 
-[ⓘ Вернуться назад README.md](https://github.com/presdes/8-03-hw_pre/blob/main/README.md)
+[ⓘ Вернуться назад > README.md](https://github.com/presdes/8-03-hw_pre/blob/main/README.md)
