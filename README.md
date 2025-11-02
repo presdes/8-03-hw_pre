@@ -200,6 +200,8 @@ done
 # Создаем директорию для конфигурации
 sudo mkdir -p /srv/gitlab-runner/config
 
+**Важно:** Эта команда создает директорию в корневой файловой системе (`/srv/gitlab-runner/config`), а не в домашней директории.
+
 # Получаем регистрационный токен из GitLab:
 # Project → Settings → CI/CD → Runners → Registration token
 
@@ -280,6 +282,7 @@ git config --global user.email "your.email@example.com"
 ```
 
 ### Шаг 3.2: Создание тестового Go приложения
+**Примечание:** Выполняйте команды в каталоге склонированного проекта `netology-gitlab/`
 ```bash
 # Создаем структуру проекта
 mkdir -p src
@@ -682,8 +685,10 @@ unit-test:
 ```yaml
 sonarqube-check:
   image: sonarsource/sonar-scanner-cli
+  variables:
+    SONAR_HOST_URL: "http://sonarqube.localdomain:9000"
   script:
-    - sonar-scanner
+    - sonar-scanner -Dsonar.host.url=http://sonarqube.localdomain:9000
       -Dsonar.projectKey=my-project
       -Dsonar.sources=src
       -Dsonar.host.url=http://sonarqube:9000
