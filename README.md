@@ -351,7 +351,7 @@ sonar.projectName=Netology GitLab Project
 sonar.projectVersion=1.0
 sonar.sources=src
 sonar.sourceEncoding=UTF-8
-sonar.host.url=http://sonarqube:9000
+sonar.host.url=http://sonarqube.localdomain:9000
 sonar.login=${SONAR_TOKEN}
 EOF
 ```
@@ -387,7 +387,7 @@ static-analysis:
     - sonar-scanner 
       -Dsonar.projectKey=netology-gitlab 
       -Dsonar.sources=src 
-      -Dsonar.host.url=http://sonarqube:9000 
+      -Dsonar.host.url=http://sonarqube.localdomain:9000 
       -Dsonar.login=$SONAR_TOKEN
   allow_failure: true
   tags:
@@ -435,7 +435,7 @@ sonarqube-check:
     - sonar-scanner 
       -Dsonar.projectKey=netology-gitlab 
       -Dsonar.sources=src 
-      -Dsonar.host.url=http://sonarqube:9000 
+      -Dsonar.host.url=http://sonarqube.localdomain:9000
       -Dsonar.login=$SONAR_TOKEN
   allow_failure: true
   tags:
@@ -691,7 +691,7 @@ sonarqube-check:
     - sonar-scanner -Dsonar.host.url=http://sonarqube.localdomain:9000
       -Dsonar.projectKey=my-project
       -Dsonar.sources=src
-      -Dsonar.host.url=http://sonarqube:9000
+      -Dsonar.host.url=http://sonarqube.localdomain:9000
       -Dsonar.login=$SONAR_TOKEN
 ```
 
