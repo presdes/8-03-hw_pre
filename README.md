@@ -74,9 +74,9 @@ services:
       - '443:443'
       - '2222:22'
     volumes:
-      - './config:/etc/gitlab'
-      - './logs:/var/log/gitlab'
-      - './data:/var/opt/gitlab'
+      - 'gitlab_config:/etc/gitlab'
+      - 'gitlab_logs:/var/log/gitlab'
+      - 'gitlab_data:/var/opt/gitlab'
     restart: always
     networks:
       - gitlab-network
@@ -90,12 +90,20 @@ services:
     ports:
       - '9000:9000'
     volumes:
-      - './sonarqube/data:/opt/sonarqube/data'
-      - './sonarqube/logs:/opt/sonarqube/logs'
-      - './sonarqube/extensions:/opt/sonarqube/extensions'
+      - 'sonarqube_data:/opt/sonarqube/data'
+      - 'sonarqube_logs:/opt/sonarqube/logs'
+      - 'sonarqube_extensions:/opt/sonarqube/extensions'
     restart: always
     networks:
       - gitlab-network
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
 
 networks:
   gitlab-network:
