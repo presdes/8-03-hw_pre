@@ -1,36 +1,90 @@
-Отличное замечание! Проанализировал Vagrantfile и внесу соответствующие изменения, чтобы наше руководство было максимально похоже по структуре и функциональности.
-
-## Исправленное руководство по развертыванию GitLab с GitLab Runner и SonarQube в Docker
-
-```bash
 # Практическое руководство: Развертывание GitLab с GitLab Runner и SonarQube в Docker
-# Аналог Vagrantfile: https://github.com/netology-code/sdvps-materials/blob/main/gitlab/Vagrantfile
-```
 
-### Архитектура решения после исправлений:
+Полный аналог Vagrantfile: https://github.com/netology-code/sdvps-materials/blob/main/gitlab/Vagrantfile
+
+## Архитектура решения
 
 ```
 +-----------------------------------------------------------------------+
-| Docker Host (аналог Vagrant VM)                                       |
+| Docker Host                                                           |
 |                                                                       |
 |  +----------------+      +------------------+      +---------------+  |
 |  | GitLab         |      | GitLab Runner    |      | SonarQube     |  |
-|  | (gitlab)       |      | (gitlab-runner)  |      | (sonarqube)   |  |
-|  | Ports: 80, 443 |      |                  |      | Port: 9000    |  |
+|  | 192.168.56.10  |      | 192.168.56.30    |      | 192.168.56.20 |  |
+|  | gitlab.localdomain|   |                  |      | sonarqube.localdomain|
+|  | Ports: 80,443,2224 |  |                  |      | Port: 9000    |  |
 |  +----------------+      +------------------+      +---------------+  |
 |                                                                       |
-|                     Docker Network: gitlab-network                    |
+|                  Docker Network: 192.168.56.0/24                     |
 +-----------------------------------------------------------------------+
 ```
 
 ---
 
-## Шаг 1: Подготовка окружения и создание docker-compose.yml
+## Предварительные требования
+
+- Сервер с установленными Docker и Docker Compose
+- Минимум 6 ГБ оперативной памяти (4 ГБ для GitLab + 2 ГБ для SonarQube)
+- Права sudo для настройки hosts файла
+- Достаточное дисковое пространство
+
+---
+
+## Шаг 1: Подготовка окружения
 
 ```bash
+# Выполняем в домашней директории или в выбранной вами location
+cd ~
 mkdir gitlab-sonarqube-setup
 cd gitlab-sonarqube-setup
 ```
+
+---
+
+## Шаг 2: Настройка hosts файла (аналог Vagrantfile)
+
+Создайте файл `setup-hosts.sh`:
+
+```bash
+#!/bin/bash
+
+echo "=== НАСТРОЙКА HOSTS ФАЙЛА ==="
+echo "Добавляем записи аналогично Vagrantfile..."
+
+HOSTS_FILE="/etc/hosts"
+TEMP_FILE="/tmp/hosts.tmp"
+
+# Создаем резервную копию
+sudo cp $HOSTS_FILE "${HOSTS_FILE}.backup.$(date +%Y%m%d%H%M%S)"
+
+# Удаляем старые записи если есть
+sudo grep -v -e "192.168.56.10" -e "192.168.56.20" -e "192.168.56.30" $HOSTS_FILE > $TEMP_FILE
+
+# Добавляем новые записи (аналогично Vagrantfile)
+echo "192.168.56.10    gitlab.localdomain" | sudo tee -a $TEMP_FILE
+echo "192.168.56.20    sonarqube.localdomain" | sudo tee -a $TEMP_FILE
+echo "192.168.56.30    gitlab-runner.localdomain" | sudo tee -a $TEMP_FILE
+
+# Заменяем оригинальный файл
+sudo cp $TEMP_FILE $HOSTS_FILE
+sudo rm $TEMP_FILE
+
+echo "Hosts файл успешно настроен!"
+echo "============================"
+grep "192.168.56" $HOSTS_FILE
+```
+
+Выполните настройку hosts файла:
+```bash
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+chmod +x setup-hosts.sh
+sudo ./setup-hosts.sh
+```
+
+---
+
+## Шаг 3: Создание docker-compose.yml с фиксированными IP
 
 Создайте `docker-compose.yml`:
 
@@ -41,14 +95,15 @@ services:
   gitlab:
     image: gitlab/gitlab-ce:latest
     container_name: gitlab
-    hostname: gitlab
+    hostname: gitlab.localdomain
     restart: always
     environment:
       GITLAB_OMNIBUS_CONFIG: |
         external_url 'http://gitlab.localdomain'
         gitlab_rails['gitlab_shell_ssh_port'] = 2224
-        # Отключаем встроенный мониторинг для экономии ресурсов (аналог Vagrantfile)
         prometheus_monitoring['enable'] = false
+        # Настройки для работы с фиксированным IP
+        gitlab_rails['gitlab_ssh_host'] = '192.168.56.10'
     ports:
       - "80:80"
       - "443:443"
@@ -58,7 +113,8 @@ services:
       - gitlab_logs:/var/log/gitlab
       - gitlab_data:/var/opt/gitlab
     networks:
-      - gitlab-network
+      gitlab-network:
+        ipv4_address: 192.168.56.10
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s
@@ -70,14 +126,20 @@ services:
     container_name: gitlab-runner
     restart: always
     depends_on:
-      - gitlab
+      gitlab:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - gitlab-runner-config:/etc/gitlab-runner
     networks:
-      - gitlab-network
+      gitlab-network:
+        ipv4_address: 192.168.56.30
     environment:
       - GODEBUG=netdns=go
+    # Дополнительные hosts записи внутри контейнера
+    extra_hosts:
+      - "gitlab.localdomain:192.168.56.10"
+      - "sonarqube.localdomain:192.168.56.20"
 
   sonarqube:
     image: sonarqube:community
@@ -86,7 +148,7 @@ services:
     restart: always
     environment:
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-      # Оптимизации для ограниченных ресурсов (аналог настроек Vagrant)
+      # Оптимизации для ограниченных ресурсов
       SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms128m"
     ports:
       - "9000:9000"
@@ -95,7 +157,8 @@ services:
       - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_logs:/opt/sonarqube/logs
     networks:
-      - gitlab-network
+      gitlab-network:
+        ipv4_address: 192.168.56.20
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/api/system/status"]
       interval: 30s
@@ -115,31 +178,97 @@ networks:
   gitlab-network:
     name: gitlab-network
     driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.56.0/24
+          gateway: 192.168.56.1
 ```
 
 ---
 
-## Шаг 2: Запуск и инициализация инфраструктуры
+## Шаг 4: Запуск и инициализация инфраструктуры
 
 ```bash
+# Выполняем в директории gitlab-sonarqube-setup (где лежит docker-compose.yml)
+cd ~/gitlab-sonarqube-setup
+
 # Запуск всех сервисов (аналог vagrant up)
 docker compose up -d
 
 # Мониторинг запуска
+echo "Ожидаем запуск сервисов..."
 docker compose logs -f gitlab &
+```
+
+---
+
+## Шаг 5: Проверка сетевой конфигурации
+
+Создайте файл `check-network.sh`:
+
+```bash
+#!/bin/bash
+
+echo "=== ПРОВЕРКА СЕТЕВОЙ КОНФИГУРАЦИИ ==="
+
+echo "1. Проверка hosts файла:"
+grep "192.168.56" /etc/hosts || echo "Записи не найдены в hosts файле"
+
+echo ""
+echo "2. Проверка разрешения имен:"
+echo "gitlab.localdomain -> $(dig +short gitlab.localdomain 2>/dev/null || nslookup gitlab.localdomain 2>/dev/null | grep Address | tail -1 || echo 'проверка не удалась')"
+echo "sonarqube.localdomain -> $(dig +short sonarqube.localdomain 2>/dev/null || nslookup sonarqube.localdomain 2>/dev/null | grep Address | tail -1 || echo 'проверка не удалась')"
+
+echo ""
+echo "3. Проверка сети Docker:"
+docker network inspect gitlab-network --format '{{range .Containers}}{{.Name}} - {{.IPv4Address}}{{"\n"}}{{end}}'
+
+echo ""
+echo "4. Проверка связи между контейнерами:"
+echo "Из Runner в GitLab:"
+docker compose exec gitlab-runner ping -c 2 gitlab.localdomain
+
+echo "Из Runner в SonarQube:"
+docker compose exec gitlab-runner ping -c 2 sonarqube.localdomain
+
+echo ""
+echo "5. Проверка доступности сервисов:"
+echo "GitLab: http://gitlab.localdomain"
+curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" http://gitlab.localdomain || echo "Недоступен"
+
+echo "SonarQube: http://sonarqube.localdomain:9000"
+curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" http://sonarqube.localdomain:9000 || echo "Недоступен"
+```
+
+Выполните проверку:
+```bash
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+chmod +x check-network.sh
+./check-network.sh
+```
+
+---
+
+## Шаг 6: Ожидание инициализации GitLab
+
+```bash
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
 
 # Ожидание полной инициализации GitLab (аналог ожидания в Vagrantfile)
 echo "Ожидаем инициализацию GitLab..."
 while true; do
     if docker compose logs gitlab 2>/dev/null | grep -q "gitlab Reconfigured!"; then
-        echo "GitLab успешно запущен!"
+        echo "✅ GitLab успешно запущен и сконфигурирован!"
         break
     fi
     sleep 10
-    echo "Ожидаем... (проверка через 10 секунд)"
+    echo "⏳ Ожидаем... (проверка через 10 секунд)"
 done
 
 # Получение пароля root (аналог вывода пароля в Vagrant)
+echo ""
 echo "=== ПАРОЛЬ ROOT ДЛЯ GITLAB ==="
 docker compose exec gitlab grep 'Password:' /etc/gitlab/initial_root_password || echo "Пароль уже использован, установите новый через интерфейс"
 echo "=============================="
@@ -147,16 +276,21 @@ echo "=============================="
 
 ---
 
-## Шаг 3: Настройка GitLab Runner (аналог provisioning в Vagrant)
+## Шаг 7: Настройка GitLab Runner
 
 ```bash
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+
 # Ожидаем полную готовность GitLab API
 sleep 30
+
+echo "Регистрируем GitLab Runner..."
 
 # Регистрация Runner с настройками аналогичными Vagrantfile
 docker compose exec gitlab-runner gitlab-runner register \
   --non-interactive \
-  --url "http://gitlab/" \
+  --url "http://gitlab.localdomain/" \
   --registration-token "$(docker compose exec gitlab gitlab-rails runner -e production "puts Gitlab::CurrentSettings.current_application_settings.runners_registration_token")" \
   --executor "docker" \
   --docker-image "alpine:latest" \
@@ -168,27 +302,27 @@ docker compose exec gitlab-runner gitlab-runner register \
   --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
   --docker-volumes "/cache"
 
-echo "GitLab Runner зарегистрирован и готов к работе"
+echo "✅ GitLab Runner успешно зарегистрирован"
 ```
 
 ---
 
-## Шаг 4: Настройка SonarQube (аналог ручной настройки в Vagrant)
+## Шаг 8: Настройка SonarQube
 
 После запуска выполните:
 
-1. **Откройте SonarQube:** http://localhost:9000
+1. **Откройте SonarQube:** http://sonarqube.localdomain:9000
    - Логин: `admin`
    - Пароль: `admin`
 
-2. **Смена пароля** (обязательно, как в инструкции Vagrant):
+2. **Смена пароля** (обязательно):
    - При первом входе смените пароль на `netology`
 
 3. **Создание токена для GitLab:**
    ```bash
-   # Инструкция для создания токена (выполняется в UI SonarQube)
+   # Выполняем в любой директории - это просто инструкция для пользователя
    echo "Для настройки SonarQube:"
-   echo "1. Войдите в http://localhost:9000 (admin/netology)"
+   echo "1. Войдите в http://sonarqube.localdomain:9000 (admin/netology)"
    echo "2. Перейдите: My Account -> Security -> Generate Token"
    echo "3. Название: 'gitlab-token', скопируйте значение"
    echo "4. Добавьте токен как переменную SONAR_TOKEN в GitLab CI/CD"
@@ -196,20 +330,21 @@ echo "GitLab Runner зарегистрирован и готов к работе
 
 ---
 
-## Шаг 5: Создание тестового проекта и настройка CI/CD
+## Шаг 9: Настройка проекта в GitLab
 
-### 1. Создайте новый проект в GitLab:
-```bash
-echo "Создайте проект в GitLab: http://localhost"
-echo "Или используйте существующий репозиторий"
-```
+### 1. Создайте проект в GitLab:
+- Откройте http://gitlab.localdomain
+- Войдите как root (пароль из шага 6)
+- Создайте новый проект или импортируйте существующий
 
 ### 2. Добавьте переменные CI/CD в GitLab:
-- **Settings → CI/CD → Variables → Expand**
-- `SONAR_TOKEN` = [ваш токен из SonarQube]
-- `SONAR_HOST_URL` = `http://sonarqube.localdomain:9000`
+- Перейдите в **Settings → CI/CD → Variables → Expand**
+- Добавьте переменные:
+  - `SONAR_TOKEN` = [ваш токен из SonarQube]
+  - `SONAR_HOST_URL` = `http://sonarqube.localdomain:9000`
 
-### 3. Пример .gitlab-ci.yml для Java проекта:
+### 3. Создайте файл .gitlab-ci.yml в корне вашего проекта:
+
 ```yaml
 stages:
   - test
@@ -228,6 +363,9 @@ sonarqube-check:
       - "${CI_JOB_NAME}"
     paths:
       - .sonar/cache
+  before_script:
+    # Добавляем запись в hosts внутри контейнера для гарантии
+    - echo "192.168.56.20 sonarqube.localdomain" >> /etc/hosts
   script:
     - sonar-scanner
       -Dsonar.projectKey=${CI_PROJECT_NAME}
@@ -236,7 +374,6 @@ sonarqube-check:
       -Dsonar.token=${SONAR_TOKEN}
       -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA}
       -Dsonar.sources=.
-      -Dsonar.java.binaries=target/classes
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -244,79 +381,125 @@ sonarqube-check:
 
 ---
 
-## Шаг 6: Полезные команды для управления (аналог vagrant commands)
+## Шаг 10: Полезные команды управления
 
 ```bash
+# Все команды выполняются в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+
 # Просмотр статуса всех сервисов
 docker compose ps
 
-# Просмотр логов конкретного сервиса
+# Просмотр логов
 docker compose logs gitlab
 docker compose logs sonarqube
 docker compose logs gitlab-runner
 
-# Остановка всех сервисов (аналог vagrant halt)
+# Остановка всех сервисов
 docker compose stop
 
-# Полная остановка с удалением контейнеров (аналог vagrant destroy)
+# Полная остановка с удалением контейнеров
 docker compose down
 
-# Перезапуск конкретного сервиса
-docker compose restart gitlab
+# Перезапуск
+docker compose restart
 
-# Вход в контейнер для отладки
-docker compose exec gitlab bash
-docker compose exec sonarqube bash
+# Обновление и перезапуск
+docker compose pull && docker compose up -d
+
+# Проверка здоровья сервисов
+docker compose ps --filter "status=running"
 ```
 
 ---
 
-## Шаг 7: Проверка работоспособности
+## Шаг 11: Проверка работоспособности
 
 ```bash
-# Проверка доступности сервисов
-echo "Проверка доступности сервисов:"
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
 
-echo -n "GitLab: "
-curl -s -o /dev/null -w "%{http_code}" http://localhost || echo " недоступен"
+# Финальная проверка
+echo "=== ФИНАЛЬНАЯ ПРОВЕРКА РАБОТОСПОСОБНОСТИ ==="
 
-echo -n "SonarQube: "
-curl -s -o /dev/null -w "%{http_code}" http://localhost:9000 || echo " недоступен"
+echo "1. Сервисы доступны по доменным именам:"
+echo "   GitLab:       http://gitlab.localdomain"
+echo "   SonarQube:    http://sonarqube.localdomain:9000"
 
-# Проверка сети между контейнерами
-echo "Проверка связи между контейнерами:"
-docker compose exec gitlab-runner ping -c 2 sonarqube.localdomain
+echo "2. Сеть настроена корректно:"
+docker compose exec gitlab-runner curl -s http://sonarqube.localdomain:9000/api/system/status | grep -q "UP" && echo "   ✅ SonarQube доступен из Runner" || echo "   ❌ SonarQube недоступен из Runner"
 
-echo "=== СЕТЕВЫЕ НАСТРОЙКИ ==="
-docker network inspect gitlab-network --format '{{range .Containers}}{{.Name}} - {{.IPv4Address}}{{"\n"}}{{end}}'
+echo "3. GitLab Runner зарегистрирован:"
+docker compose exec gitlab-runner gitlab-runner list && echo "   ✅ Runner активен" || echo "   ❌ Проблемы с Runner"
+
+echo "=== НАСТРОЙКА ЗАВЕРШЕНА ==="
 ```
 
 ---
 
-## Решение распространенных проблем
+## Решение проблем
 
-### 1. Проблемы с памятью (аналогично настройкам в Vagrantfile):
+### Если сервисы недоступны по доменным именам:
 ```bash
-# Если контейнеры падают из-за нехватки памяти:
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+
+# Перезапускаем сервисы
+docker compose restart
+
+# Проверяем hosts файл
+sudo ./setup-hosts.sh
+
+# Проверяем сеть
+./check-network.sh
+```
+
+### Если Runner не может подключиться к SonarQube:
+```bash
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+
+# Проверяем связность из контейнера Runner
+docker compose exec gitlab-runner ping sonarqube.localdomain
+docker compose exec gitlab-runner curl -v http://sonarqube.localdomain:9000
+```
+
+### Проблемы с памятью:
+```bash
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+
+# Останавливаем сервисы
 docker compose stop
-sudo systemctl restart docker
+
+# Очищаем ресурсы Docker
+docker system prune -f
+
+# Запускаем заново
 docker compose up -d
 ```
 
-### 2. Проблемы с регистрацией Runner:
+### Для полного удаления и переустановки:
 ```bash
-# Получить токен вручную:
-docker compose exec gitlab gitlab-rails runner -e production "puts Gitlab::CurrentSettings.current_application_settings.runners_registration_token"
+# Выполняем в директории gitlab-sonarqube-setup
+cd ~/gitlab-sonarqube-setup
+
+# Полное удаление
+docker compose down -v
+sudo rm -rf ./*
+
+# Возвращаемся на шаг 1
+cd ~
+rm -rf gitlab-sonarqube-setup
 ```
 
-### 3. SonarQube не запускается:
-```bash
-# Проверить логи
-docker compose logs sonarqube
+---
 
-# Частая проблема - недостаточно памяти для Elasticsearch
-export SONARQUBE_JAVA_OPTS="-Xmx512m -Xms128m"
-docker compose up -d sonarqube
-```
+## Важные примечания
 
-Это руководство теперь максимально приближено к логике оригинального Vagrantfile, но реализовано на Docker Compose с учетом всех особенностей сетевого взаимодействия и интеграции между компонентами.
+- **Все Docker команды** выполняются в директории `~/gitlab-sonarqube-setup` (где лежит `docker-compose.yml`)
+- **Скрипты настройки** (`setup-hosts.sh`, `check-network.sh`) выполняются из той же директории
+- **Команды GitLab CI/CD** настраиваются в интерфейсе GitLab или в файлах проекта
+- **Первоначальная настройка** выполняется из любой директории, но основная работа - из `~/gitlab-sonarqube-setup`
+
+Теперь ваша инфраструктура полностью развернута с фиксированными IP-адресами и доменными именами, полностью соответствующая оригинальной конфигурации Vagrantfile!
