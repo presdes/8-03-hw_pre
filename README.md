@@ -49,17 +49,21 @@ free -h
 
 ## Развертывание GitLab и SonarQube
 
-### Шаг 1.1: Создание рабочей директории
+# Практическое задание: Настройка GitLab CI/CD с SonarQube
+
+## Цель
+Настроить автоматизированный пайплайн CI/CD с интеграцией SonarQube для анализа кода.
+
+## Шаг 1: Развертывание GitLab и SonarQube
+
+### 1.1: Подготовка окружения
 ```bash
-mkdir -p ~/gitlab-setup
+mkdir gitlab-setup && cd gitlab-setup
 cd ~/gitlab-setup
 ```
 
 ### Шаг 1.2: Создание docker-compose.yml
-```bash
-cat > docker-compose.yml << 'EOF'
-version: '3.6'
-
+```yaml
 services:
   gitlab:
     image: 'gitlab/gitlab-ce:latest'
@@ -74,9 +78,9 @@ services:
       - '443:443'
       - '2222:22'
     volumes:
-      - 'gitlab_config:/etc/gitlab'
-      - 'gitlab_logs:/var/log/gitlab'
-      - 'gitlab_data:/var/opt/gitlab'
+      - './config:/etc/gitlab'
+      - './logs:/var/log/gitlab'
+      - './data:/var/opt/gitlab'
     restart: always
     networks:
       - gitlab-network
@@ -98,9 +102,6 @@ services:
       - gitlab-network
 
 volumes:
-  gitlab_config:
-  gitlab_logs:
-  gitlab_data:
   sonarqube_data:
   sonarqube_logs:
   sonarqube_extensions:
@@ -108,7 +109,6 @@ volumes:
 networks:
   gitlab-network:
     driver: bridge
-EOF
 ```
 
 ### Шаг 1.3: Запуск сервисов
@@ -169,7 +169,7 @@ done
    - Пароль: `admin`
 3. **Смените пароль** и сохраните его
 4. **Создайте токен:**
-   - My Account → Security → Generate Tokens
+   - My Account → Security → Generate Tokens (тип: User Token)
    - Название: `gitlab-ci-token`
    - **Скопируйте токен** (он покажется только один раз!)
 
@@ -206,23 +206,23 @@ sudo mkdir -p /srv/gitlab-runner/config
 # Project → Settings → CI/CD → Runners → Registration token
 
 # Регистрируем Runner
-docker run -ti --rm --name gitlab-runner \
-  --network host \
+docker run --rm -it \
+  --network gitlab-setup_gitlab-network \  # ← ЭТО КРИТИЧЕСКИ ВАЖНО
   -v /srv/gitlab-runner/config:/etc/gitlab-runner \
-  -v /var/run/docker.sock:/var/run/docker.sock \
   gitlab/gitlab-runner:latest register
 ```
 
 **Ответьте на вопросы при регистрации:**
 ```
 Enter the GitLab instance URL: http://gitlab.localdomain/
-Enter the registration token: (ваш токен из GitLab)
+Enter the registration token: (из Settings → CI/CD → Runners в вашем проекте)
 Enter a description for the runner: netology-runner
-Enter tags for the runner: docker,linux
+Enter tags for the runner: docker,go,sonarqube
 Enter optional maintenance note: (нажмите Enter)
 Enter an executor: docker
-Enter the default Docker image: alpine:latest
+Enter the default Docker image: golang:latest
 ```
+Важно: При регистрации runner должен находиться в той же Docker сети что и GitLab/SonarQube.
 
 ### Шаг 2.4: Настройка конфигурации Runner
 ```bash
