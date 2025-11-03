@@ -32,6 +32,10 @@
 |  etc\hosts                     |                                     |
 +---------------------------------+-------------------------------------+
 ```
+Расположение данных
+- Проекты GitLab: /var/opt/gitlab/git-data/repositories/ (внутри контейнера)
+- Конфигурация: Docker volumes
+- Логи: Docker volumes
 ---
 
 ## Предварительные требования
@@ -227,7 +231,125 @@ networks:
         - subnet: 192.168.56.0/24
           gateway: 192.168.56.1
 ```
+Экономная конфигурация Docker Compose
+```bash
+cat > docker-compose.yml << 'EOF'
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: gitlab
+    hostname: gitlab.localdomain
+    restart: unless-stopped
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab.localdomain'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2224
+        # ОПТИМИЗАЦИИ ДЛЯ ЭКОНОМИИ РЕСУРСОВ
+        prometheus_monitoring['enable'] = false
+        grafana['enable'] = false
+        puma['worker_processes'] = 2
+        puma['min_threads'] = 1
+        puma['max_threads'] = 4
+        sidekiq['max_concurrency'] = 5
+        gitlab_rails['gitlab_default_can_create_group'] = 'false'
+        gitlab_rails['gitlab_default_projects_features_issues'] = 'false'
+        gitlab_rails['gitlab_default_projects_features_merge_requests'] = 'false'
+        gitlab_rails['gitlab_default_projects_features_wiki'] = 'false'
+        nginx['worker_processes'] = 2
+        nginx['worker_connections'] = 1024
+        postgresql['shared_buffers'] = '256MB'
+        redis['maxmemory'] = '128mb'
+        redis['maxmemory_policy'] = 'allkeys-lru'
+    ports:
+      - "80:80"
+      - "443:443"
+      - "2224:22"
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    networks:
+      gitlab-network:
+        ipv4_address: 192.168.56.10
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 600s
+    # ЭКОНОМНЫЕ НАСТРОЙКИ
+    mem_limit: 2g
+    mem_reservation: 1g
+    cpus: 1.0
 
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    container_name: gitlab-runner
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - gitlab-runner-config:/etc/gitlab-runner
+    networks:
+      gitlab-network:
+        ipv4_address: 192.168.56.30
+    extra_hosts:
+      - "gitlab.localdomain:192.168.56.10"
+      - "sonarqube.localdomain:192.168.56.20"
+    # МИНИМАЛЬНЫЕ РЕСУРСЫ
+    mem_limit: 512m
+    cpus: 0.5
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    hostname: sonarqube.localdomain
+    restart: unless-stopped
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+      # ОПТИМИЗАЦИИ ДЛЯ МАЛОЙ ПАМЯТИ
+      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms128m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC"
+      SONAR_CE_JAVAOPTS: "-Xmx512m -Xms128m -XX:MaxMetaspaceSize=128m"
+      SONAR_SEARCH_JAVAOPTS: "-Xmx512m -Xms128m -XX:MaxMetaspaceSize=128m"
+      SONAR_JDBC_MAXACTIVE: "10"
+      SONAR_JDBC_MAXIDLE: "5"
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      gitlab-network:
+        ipv4_address: 192.168.56.20
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    # ЭКОНОМНЫЕ НАСТРОЙКИ
+    mem_limit: 1g
+    mem_reservation: 512m
+    cpus: 1.0
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+  gitlab-runner-config:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
+
+networks:
+  gitlab-network:
+    name: gitlab-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.56.0/24
+          gateway: 192.168.56.1
+EOF
+```
 ---
 
 ## Шаг 4: Запуск и инициализация инфраструктуры
@@ -244,7 +366,7 @@ docker system df
 docker compose up -d
 
 # Мониторинг запуска
-echo "Ожидаем запуск сервисов..."
+echo "⏳ Ожидайте полный запуск GitLab (10-15 минут)..."
 docker compose logs -f gitlab &
 ```
 
@@ -455,17 +577,11 @@ curl -I http://gitlab.localdomain
 ---
 
 ## Шаг 7: Настройка GitLab Runner
-
+Регистрация общего Runner
 ```bash
 # Выполняем в директории gitlab-sonarqube-setup
 cd ~/gitlab-sonarqube-setup
 
-# Ожидаем полную готовность GitLab API
-sleep 30
-
-echo "Регистрируем GitLab Runner..."
-
-# Регистрация Runner с настройками аналогичными Vagrantfile
 docker compose exec gitlab-runner gitlab-runner register \
   --non-interactive \
   --url "http://gitlab.localdomain/" \
@@ -480,11 +596,11 @@ docker compose exec gitlab-runner gitlab-runner register \
   --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
   --docker-volumes "/cache"
 
-echo "✅ GitLab Runner успешно зарегистрирован"
+echo "✅ GitLab Runner зарегистрирован!"
 ```
 
 ---
-
+# 🔗 Интеграция CI/CD с SonarQube
 ## Шаг 8: Настройка SonarQube
 
 После запуска выполните:
