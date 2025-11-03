@@ -321,7 +321,137 @@ echo "=== ПАРОЛЬ ROOT ДЛЯ GITLAB ==="
 docker compose exec gitlab grep 'Password:' /etc/gitlab/initial_root_password || echo "Пароль уже использован, установите новый через интерфейс"
 echo "=============================="
 ```
+Скрипт ожидания доступности GitLab wait-gitlab-working.sh
+```bash
+cat > wait-gitlab-working.sh << 'EOF'
+#!/bin/bash
 
+echo "⏳ Проверяем статус GitLab..."
+cd ~/gitlab-sonarqube-setup
+
+# Функция для получения статуса разными способами
+get_gitlab_status() {
+    # Способ 1: через docker compose ps --format json
+    local status1=$(docker compose ps gitlab --format json 2>/dev/null | jq -r '.[].Status' 2>/dev/null)
+    
+    # Способ 2: через парсинг вывода docker compose ps
+    local status2=$(docker compose ps gitlab 2>/dev/null | grep gitlab | awk '{print $4}')
+    
+    # Способ 3: через docker inspect
+    local status3=$(docker inspect gitlab --format='{{.State.Health.Status}}' 2>/dev/null)
+    
+    # Возвращаем первый непустой статус
+    if [ -n "$status1" ]; then
+        echo "$status1"
+    elif [ -n "$status2" ]; then
+        echo "$status2"
+    elif [ -n "$status3" ]; then
+        echo "$status3"
+    else
+        echo "unknown"
+    fi
+}
+
+# Функция проверки доступности GitLab
+check_gitlab_accessible() {
+    if curl -s -f http://gitlab.localdomain > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+echo "🔍 Проверяем текущее состояние..."
+
+# Проверяем доступность сразу
+if check_gitlab_accessible; then
+    echo "✅ GitLab уже доступен в браузере!"
+else
+    echo "❌ GitLab недоступен по http://gitlab.localdomain"
+fi
+
+# Проверяем статус контейнера
+STATUS=$(get_gitlab_status)
+echo "📊 Статус контейнера: $STATUS"
+
+# Если GitLab доступен в браузере, сразу получаем пароль
+if check_gitlab_accessible; then
+    echo ""
+    echo "🎉 GitLab готов! Получаем пароль..."
+    
+    # Даем дополнительное время для стабилизации
+    sleep 10
+    
+    # Получаем пароль
+    PASSWORD=$(docker compose exec gitlab grep 'Password:' /etc/gitlab/initial_root_password 2>/dev/null | cut -d: -f2- | sed 's/^ *//;s/ *$//')
+    
+    if [ -n "$PASSWORD" ]; then
+        echo "========================================"
+        echo "🔐 ROOT PASSWORD: $PASSWORD"
+        echo "========================================"
+        echo ""
+        echo "🌐 GitLab: http://gitlab.localdomain"
+        echo "👤 Логин: root"
+        echo "🔑 Пароль: (см. выше)"
+    else
+        echo "❌ Пароль не найден в файле"
+        echo "Попробуйте получить вручную:"
+        echo "docker compose exec gitlab cat /etc/gitlab/initial_root_password"
+    fi
+    exit 0
+fi
+
+# Если GitLab еще не доступен, ждем
+echo ""
+echo "⏳ Ожидаем полную готовность GitLab..."
+
+for i in {1..30}; do
+    STATUS=$(get_gitlab_status)
+    echo "Проверка $i/30: Статус=$STATUS"
+    
+    if check_gitlab_accessible; then
+        echo "✅ GitLab стал доступен!"
+        
+        # Даем время для полной инициализации
+        sleep 30
+        
+        # Получаем пароль
+        PASSWORD=$(docker compose exec gitlab grep 'Password:' /etc/gitlab/initial_root_password 2>/dev/null | cut -d: -f2- | sed 's/^ *//;s/ *$//')
+        
+        if [ -n "$PASSWORD" ]; then
+            echo "========================================"
+            echo "🔐 ROOT PASSWORD: $PASSWORD"
+            echo "========================================"
+        else
+            echo "⚠️ Пароль не найден автоматически"
+        fi
+        
+        echo "🌐 GitLab: http://gitlab.localdomain"
+        exit 0
+    fi
+    
+    sleep 10
+done
+
+echo "❌ GitLab не стал доступен за 5 минут"
+echo "Но попробуйте открыть: http://gitlab.localdomain"
+EOF
+```
+Быстрая роверка здоровья системы (GitLab)
+```bash
+echo "=== 🔍 ДИАГНОСТИКА СИСТЕМЫ ==="
+cd ~/gitlab-sonarqube-setup
+
+# Проверяем статус
+docker compose ps
+
+# Проверяем логи
+echo "Последние логи ошибок:"
+docker compose logs gitlab --tail=20 | grep -i error
+
+# Проверяем доступность
+curl -I http://gitlab.localdomain
+```
 ---
 
 ## Шаг 7: Настройка GitLab Runner
@@ -422,6 +552,15 @@ sonarqube-check:
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 ```
+---
+## 🎯 Что делать дальше:
+1. Войдите в GitLab и смените пароль root
+2. Настройте SonarQube (смена пароля, создание токена)
+3. Создайте проект в GitLab
+4. Настройте CI/CD с переменными SonarQube
+5. Протестируйте пайплайн с анализом кода
+
+Поздравляю с успешным развертыванием! Ваша система полностью готова для разработки с CI/CD и анализом качества кода. 🚀
 
 ---
 
