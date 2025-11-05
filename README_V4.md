@@ -83,6 +83,21 @@
 │   └── registry/                  # Container Registry
 └── backups/                       # Автоматические бэкапы
 ```
+🔍 ### Просмотр структуры данных
+```bash
+# Проверка volumes Docker
+cd ~/gitlab-sonarqube-setup
+docker volume ls | grep gitlab
+
+# Просмотр физического расположения на хосте
+docker volume inspect gitlab-sonarqube-setup_gitlab_data
+
+# Просмотр структуры внутри контейнера
+docker compose exec gitlab ls -la /var/opt/gitlab/
+
+# Поиск репозиториев
+docker compose exec gitlab find /var/opt/gitlab/git-data/repositories/ -name "*.git" -type d | head -10
+```
 ---
 
 - **Проекты GitLab**: `/var/opt/gitlab/git-data/repositories/` (внутри контейнера)
