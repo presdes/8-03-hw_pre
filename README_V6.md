@@ -428,6 +428,45 @@ docker-compose ps
 
 echo "⏳ Ожидайте полный запуск GitLab (10-15 минут)..."
 ```
+При нормальной работе получаем примерно такой вывод:
+```
+[+] Running 24/24
+ ✔ sonarqube Pulled                                               272.0s
+   ✔ d4f38e2e0926 Pull complete                                    42.5s
+   ✔ 0c474f64746d Pull complete                                    61.2s
+   ✔ 0d1e9704d175 Pull complete                                    61.2s
+   ✔ 2326993b9fe6 Pull complete                                    61.2s
+   ✔ eb91fa841f89 Pull complete                                   261.5s
+   ✔ 9e0d86e3b9d8 Pull complete                                   268.4s
+   ✔ 4f4fb700ef54 Pull complete                                   268.7s
+ ✔ gitlab Pulled                                                  555.9s
+   ✔ 4b3ffd8ccb52 Pull complete                                     7.6s
+   ✔ f504df53e287 Pull complete                                     7.7s
+   ✔ 2edd9432c4d6 Pull complete                                    11.5s
+   ✔ 535c43257f7d Pull complete                                    11.6s
+   ✔ db2d07e90c80 Pull complete                                    11.6s
+   ✔ 8f1685a742d2 Pull complete                                    11.7s
+   ✔ eff7b5192583 Pull complete                                    11.7s
+   ✔ 95c6ee077a68 Pull complete                                    11.7s
+   ✔ d3d71c5c4f6e Pull complete                                   531.1s
+ ✔ gitlab-runner Pulled                                           148.9s
+   ✔ de66fc90c55d Pull complete                                    21.5s
+   ✔ 41d67aeda2be Pull complete                                    36.1s
+   ✔ 4d48ea5044a3 Pull complete                                    36.1s
+   ✔ 5a0e5eb3034e Pull complete                                   144.1s
+   ✔ 734a07a1271e Pull complete                                   145.5s
+[+] Running 10/10
+ ✔ Volume gitlab-setup_gitlab_logs           Created                0.0s
+ ✔ Volume gitlab-setup_gitlab_data           Created                0.1s
+ ✔ Volume gitlab-setup_gitlab-runner-config  Created                0.1s
+ ✔ Volume gitlab-setup_sonarqube_data        Created                0.1s
+ ✔ Volume gitlab-setup_sonarqube_extensions  Created                0.0s
+ ✔ Volume gitlab-setup_sonarqube_logs        Created                0.1s
+ ✔ Volume gitlab-setup_gitlab_config         Created                0.1s
+ ✔ Container gitlab                          Started                9.9s
+ ✔ Container gitlab-runner                   Started                9.5s
+ ✔ Container sonarqube                       Started                9.8s
+ ```
 
 ### Шаг 3: Проверка сетевой конфигурации
 
