@@ -104,15 +104,77 @@
 - Docker Desktop с включенной опцией WSL2 integration
 
 ### Оптимальные настройки WSL2
-```bash
-# Создаем файл конфигурации WSL2
-cat > /mnt/c/Users/$USER/.wslconfig << 'EOF'
+```
 [wsl2]
 memory=6GB
 processors=2
 swap=4GB
 localhostForwarding=true
-EOF
+```
+Универсальный скрипт для оптимальных настроек WSL2: setup-wsl-config.sh
+```bash
+#!/bin/bash
+
+echo "=== 🛠️ НАСТРОЙКА WSL2 КОНФИГУРАЦИИ ==="
+
+# Функция для поиска правильного пути
+find_wsl_config_path() {
+    local possible_paths=(
+        "/mnt/c/Users/$USER/.wslconfig"
+        "/mnt/c/Users/$(whoami)/.wslconfig"
+        "/mnt/c/Users/$(echo $USER | tr '[:upper:]' '[:lower:]')/.wslcon>
+        "/mnt/c/Users/$(echo $USER | tr '[:lower:]' '[:upper:]')/.wslcon>
+    )
+
+    for path in "${possible_paths[@]}"; do
+        if [ -d "$(dirname "$path")" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+
+    # Если стандартные пути не работают, покажем доступные варианты
+    echo "🔍 Доступные пользователи в /mnt/c/Users/:"
+    ls -la /mnt/c/Users/ | grep '^d'
+    return 1
+}
+
+# Находим правильный путь
+WSL_CONFIG_PATH=$(find_wsl_config_path)
+
+if [ $? -ne 0 ]; then
+    echo "❌ Не удалось автоматически определить путь"
+    echo "📝 Пожалуйста, укажите путь вручную:"
+    read -p "Введите полный путь к .wslconfig: " WSL_CONFIG_PATH
+fi
+
+# Создаем резервную копию если файл существует
+if [ -f "$WSL_CONFIG_PATH" ]; then
+    BACKUP_PATH="${WSL_CONFIG_PATH}.backup.$(date +%Y%m%d%H%M%S)"
+    cp "$WSL_CONFIG_PATH" "$BACKUP_PATH"
+    echo "📦 Создана резервная копия: $BACKUP_PATH"
+fi
+
+# Создаем новую конфигурацию
+cat > "$WSL_CONFIG_PATH" << 'EOF'
+[wsl2]
+# Лимиты памяти и CPU
+memory=6GB
+processors=2
+swap=4GB
+swapfile=%USERPROFILE%\swap.vhdx
+
+# Сетевые настройки
+localhostForwarding=true
+
+# Оптимизации производительности
+[experimental]
+autoMemoryReclaim=dropcache
+sparseVhd=true
+```
+```bash
+chmod +x setup-wsl-config.sh
+./setup-wsl-config.sh
 ```
 
 ---
