@@ -93,7 +93,7 @@
 
 ### Для всех систем:
 - Установленные Docker и Docker Compose
-- Минимум 6 ГБ оперативной памяти (4 ГБ для GitLab + 2 ГБ для SonarQube)
+- Минимум 8 ГБ оперативной памяти (6 ГБ для GitLab + 2 ГБ для SonarQube)
 - Права sudo для настройки hosts файла
 - Достаточное дисковое пространство
 
@@ -106,9 +106,9 @@
 ### Оптимальные настройки WSL2
 ```
 [wsl2]
-memory=6GB
-processors=2
-swap=4GB
+memory=8GB
+processors=3
+swap=6GB
 localhostForwarding=true
 ```
 Универсальный скрипт для оптимальных настроек WSL2: setup-wsl-config.sh
@@ -159,13 +159,16 @@ fi
 cat > "$WSL_CONFIG_PATH" << 'EOF'
 [wsl2]
 # Лимиты памяти и CPU
-memory=6GB
-processors=2
-swap=4GB
+memory=8GB
+processors=3
+swap=6GB
 swapfile=%USERPROFILE%\swap.vhdx
 
 # Сетевые настройки
 localhostForwarding=true
+
+# ОПТИМИЗАЦИИ ПРОИЗВОДИТЕЛЬНОСТИ
+vmIdleTimeout=3600000  # Сохранять память при простое (1 час)
 
 # Оптимизации производительности
 [experimental]
