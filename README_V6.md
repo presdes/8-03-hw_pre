@@ -308,17 +308,12 @@ services:
       GITLAB_OMNIBUS_CONFIG: |
         external_url 'http://gitlab.localdomain'
         gitlab_rails['gitlab_shell_ssh_port'] = 2224
-        # ОПТИМИЗАЦИИ ДЛЯ ЭКОНОМИИ РЕСУРСОВ
         prometheus_monitoring['enable'] = false
-        # grafana['enable'] = false # ⚠️ Больше не поддерживается
         puma['worker_processes'] = 2
         puma['min_threads'] = 1
         puma['max_threads'] = 4
         sidekiq['max_concurrency'] = 5
         gitlab_rails['gitlab_default_can_create_group'] = 'false'
-        gitlab_rails['gitlab_default_projects_features_issues'] = 'false'
-        gitlab_rails['gitlab_default_projects_features_merge_requests'] = 'false'
-        gitlab_rails['gitlab_default_projects_features_wiki'] = 'false'
         nginx['worker_processes'] = 2
         nginx['worker_connections'] = 1024
         postgresql['shared_buffers'] = '256MB'
@@ -341,10 +336,9 @@ services:
       timeout: 10s
       retries: 20
       start_period: 600s
-    # ЭКОНОМНЫЕ НАСТРОЙКИ
-    mem_limit: 2g
-    mem_reservation: 1g
-    cpus: 1.0
+    mem_limit: 3g
+    mem_reservation: 2g
+    cpus: 1.5
 
   gitlab-runner:
     image: gitlab/gitlab-runner:latest
@@ -359,23 +353,24 @@ services:
     extra_hosts:
       - "gitlab.localdomain:192.168.56.10"
       - "sonarqube.localdomain:192.168.56.20"
-    # МИНИМАЛЬНЫЕ РЕСУРСЫ
     mem_limit: 512m
     cpus: 0.5
 
   sonarqube:
-    image: sonarqube:community
+    image: sonarqube:9.9.1-community  # ⚠️ КОНКРЕТНАЯ СТАБИЛЬНАЯ ВЕРСИЯ
     container_name: sonarqube
     hostname: sonarqube.localdomain
     restart: unless-stopped
     environment:
+      # МИНИМАЛЬНЫЕ НАСТРОЙКИ ДЛЯ СТАБИЛЬНОСТИ
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-      # ОПТИМИЗАЦИИ ДЛЯ МАЛОЙ ПАМЯТИ
-      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms128m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC"
-      SONAR_CE_JAVAOPTS: "-Xmx512m -Xms128m -XX:MaxMetaspaceSize=128m"
-      SONAR_SEARCH_JAVAOPTS: "-Xmx512m -Xms128m -XX:MaxMetaspaceSize=128m"
-      SONAR_JDBC_MAXACTIVE: "10"
-      SONAR_JDBC_MAXIDLE: "5"
+      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms128m"
+      SONAR_CE_JAVAOPTS: "-Xmx512m -Xms128m" 
+      SONAR_SEARCH_JAVAOPTS: "-Xmx512m -Xms128m"
+      # Отключаем все ненужное
+      SONAR_CLUSTER_ENABLED: "false"
+      SONAR_SEARCH_REPLICAS: "1"
+      SONAR_SEARCH_SHARDS: "1"
     ports:
       - "9000:9000"
     volumes:
@@ -390,9 +385,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
-    # ЭКОНОМНЫЕ НАСТРОЙКИ
-    mem_limit: 1g
-    mem_reservation: 512m
+      start_period: 180s
+    mem_limit: 2g  # ⚠️ ДАЕМ БОЛЬШЕ ПАМЯТИ
+    mem_reservation: 1g
     cpus: 1.0
 
 volumes:
