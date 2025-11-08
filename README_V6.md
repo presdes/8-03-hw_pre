@@ -247,7 +247,8 @@ sudo grep -v -e "192.168.56.10" -e "192.168.56.20" -e "192.168.56.30" $HOSTS_FIL
 # Добавляем новые записи (аналогично Vagrantfile)
 echo "192.168.56.10    gitlab.localdomain" | sudo tee -a $TEMP_FILE
 echo "192.168.56.20    sonarqube.localdomain" | sudo tee -a $TEMP_FILE
-echo "192.168.56.30    gitlab-runner.localdomain" | sudo tee -a $TEMP_FILE
+# echo "192.168.56.30    gitlab-runner.localdomain" | sudo tee -a $TEMP_FILE
+# gitlab-runner.localdomain НЕ добавляем - он не веб-сервис!
 
 # Заменяем оригинальный файл
 sudo cp $TEMP_FILE $HOSTS_FILE
