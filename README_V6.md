@@ -112,7 +112,7 @@ swap=2GB
 localhostForwarding=true
 ```
 Универсальный скрипт для оптимальных настроек WSL2: setup-wsl-config.sh
-```yaml
+```bash
 #!/bin/bash
 
 echo "=== 🛠️ НАСТРОЙКА WSL2 КОНФИГУРАЦИИ ==="
@@ -367,9 +367,9 @@ services:
     environment:
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
       # УВЕЛИЧЕННЫЕ ЛИМИТЫ
-      SONAR_WEB_JAVAOPTS: "-Xmx1g -Xms512m -XX:MaxMetaspaceSize=512m"
-      SONAR_CE_JAVAOPTS: "-Xmx1g -Xms512m -XX:MaxMetaspaceSize=512m"
-      SONAR_SEARCH_JAVAOPTS: "-Xmx1g -Xms512m -XX:MaxMetaspaceSize=512m"
+      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=256m"
+      SONAR_CE_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=256m"
+      SONAR_SEARCH_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=256m"
       SONAR_CLUSTER_ENABLED: "false"
     ports:
       - "9000:9000"
