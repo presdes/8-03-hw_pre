@@ -106,9 +106,9 @@
 ### Оптимальные настройки WSL2
 ```
 [wsl2]
-memory=8GB
-processors=3
-swap=6GB
+memory=10GB
+processors=4
+swap=2GB
 localhostForwarding=true
 ```
 Универсальный скрипт для оптимальных настроек WSL2: setup-wsl-config.sh
@@ -159,9 +159,9 @@ fi
 cat > "$WSL_CONFIG_PATH" << 'EOF'
 [wsl2]
 # Лимиты памяти и CPU
-memory=8GB
-processors=3
-swap=6GB
+memory=10GB
+processors=4
+swap=2GB
 swapfile=%USERPROFILE%\swap.vhdx
 
 # Сетевые настройки
