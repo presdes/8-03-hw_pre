@@ -310,7 +310,7 @@ services:
         gitlab_rails['gitlab_shell_ssh_port'] = 2224
         # ОПТИМИЗАЦИИ ДЛЯ ЭКОНОМИИ РЕСУРСОВ
         prometheus_monitoring['enable'] = false
-        grafana['enable'] = false
+        # grafana['enable'] = false # ⚠️ Больше не поддерживается
         puma['worker_processes'] = 2
         puma['min_threads'] = 1
         puma['max_threads'] = 4
