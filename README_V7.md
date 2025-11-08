@@ -54,12 +54,18 @@
 
 ### Распределение ресурсов
 
-| Сервис | Память | CPU | Диск | Порт |
-|--------|--------|-----|------|------|
-| GitLab | 4 GB | 2 ядра | 10+ GB | 80, 443, 2224 |
-| SonarQube | 3 GB | 2 ядра | 5+ GB | 9000 |
-| GitLab Runner | 1 GB | 1 ядро | 2+ GB | - |
+### После оптимизации (для 4 ядер / 16GB):
+- **GitLab**: 3GB RAM, 1.5 CPU ⬇️
+- **SonarQube**: 2GB RAM, 1.0 CPU ⬇️
+- **Runner**: 512MB RAM, 0.5 CPU ⬇️
+- **Всего**: 5.5GB RAM, 3.0 CPU ⬇️
 
+### WSL2 настройки:
+- **Память**: 12GB (вместо 10GB)
+- **Ядра**: 3 (вместо 4)
+- **Swap**: 4GB (вместо 2GB)
+
+Эти настройки обеспечат стабильную работу всей системы без перегрузки 4-ядерной конфигурации! 🚀
 ---
 
 ## Предварительные требования
@@ -68,8 +74,8 @@
 
 **Для всех систем:**
 - Docker 20.10+ и Docker Compose 2.0+
-- 8 ГБ оперативной памяти (рекомендуется 12 ГБ)
-- 20 ГБ свободного места на диске
+- 10 ГБ оперативной памяти (рекомендуется 12 ГБ)
+- Более 20 ГБ свободного места на диске
 - Поддержка виртуализации
 
 **Для WSL2:**
@@ -100,239 +106,13 @@ grep -E --color '(vmx|svm)' /proc/cpuinfo
 
 ### Автоматический скрипт развертывания
 
-```bash
-#!/bin/bash
-# quick-deploy.sh - Автоматическое развертывание всей инфраструктуры
 
-set -e
-
-echo "🚀 ЗАПУСК АВТОМАТИЧЕСКОГО РАЗВЕРТЫВАНИЯ GITLAB..."
-
-# Создание рабочей директории
-mkdir -p ~/gitlab-setup
-cd ~/gitlab-setup
-
-# Загрузка всех необходимых скриптов
-echo "📥 Загрузка конфигурационных файлов..."
-
-# Создание docker-compose.yml
-cat > docker-compose.yml << 'EOF'
-version: '3.8'
-
-services:
-  gitlab:
-    image: gitlab/gitlab-ce:16.5.1-ce.0
-    container_name: gitlab
-    hostname: gitlab.localdomain
-    restart: unless-stopped
-    environment:
-      GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://gitlab.localdomain'
-        gitlab_rails['gitlab_shell_ssh_port'] = 2224
-        
-        # 🔧 ОПТИМИЗАЦИИ ДЛЯ 4-ЯДЕРНОЙ СИСТЕМЫ
-        prometheus_monitoring['enable'] = false
-        grafana['enable'] = false
-        puma['worker_processes'] = 2          # ⬇️ УМЕНЬШЕНО (было 2)
-        puma['min_threads'] = 1               # ⬇️ УМЕНЬШЕНО (было 1)
-        puma['max_threads'] = 2               # ⬇️ УМЕНЬШЕНО (было 4)
-        sidekiq['max_concurrency'] = 3        # ⬇️ УМЕНЬШЕНО (было 5)
-        
-        # Настройки для веб-разработки
-        gitlab_rails['gitlab_default_can_create_group'] = 'true'
-        gitlab_rails['time_zone'] = 'Europe/Moscow'
-        
-        # Оптимизации базы данных
-        postgresql['shared_buffers'] = '256MB' # ⬇️ УМЕНЬШЕНО (было 512MB)
-        postgresql['max_connections'] = 100    # ⬇️ УМЕНЬШЕНО (было 200)
-        
-        # Оптимизации Redis
-        redis['maxmemory'] = '128mb'          # ⬇️ УМЕНЬШЕНО (было 256mb)
-        redis['maxmemory_policy'] = 'allkeys-lru'
-        
-        # Настройки NGINX
-        nginx['worker_processes'] = 1         # ⬇️ УМЕНЬШЕНО (было 2)
-        nginx['worker_connections'] = 512     # ⬇️ УМЕНЬШЕНО (было 1024)
-        
-        # Отключение неиспользуемых сервисов
-        mattermost['enable'] = false
-        registry['enable'] = false
-        
-    ports:
-      - "80:80"
-      - "443:443"
-      - "2224:22"
-    volumes:
-      - gitlab_config:/etc/gitlab
-      - gitlab_logs:/var/log/gitlab
-      - gitlab_data:/var/opt/gitlab
-    networks:
-      gitlab-network:
-        ipv4_address: 192.168.56.10
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 20
-      start_period: 600s
-    # 🔧 ОПТИМИЗИРОВАННЫЕ РЕСУРСЫ ДЛЯ 4 ЯДЕР
-    mem_limit: 3g        # ⬇️ УМЕНЬШЕНО (было 4g)
-    mem_reservation: 2g  # ⬇️ УМЕНЬШЕНО (было 3g)
-    cpus: 1.5            # ⬇️ УМЕНЬШЕНО (было 2.0)
-    deploy:
-      resources:
-        limits:
-          cpus: '1.5'
-          memory: 3G
-        reservations:
-          cpus: '1.0'
-          memory: 2G
-
-  sonarqube:
-    image: sonarqube:9.9.1-community
-    container_name: sonarqube
-    hostname: sonarqube.localdomain
-    restart: unless-stopped
-    environment:
-      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-      SONAR_JDBC_URL: ""
-      SONAR_JDBC_USERNAME: ""
-      SONAR_JDBC_PASSWORD: ""
-      
-      # 🔧 ОПТИМИЗАЦИИ ПАМЯТИ ДЛЯ 4-ЯДЕРНОЙ СИСТЕМЫ
-      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC"
-      SONAR_CE_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m"
-      SONAR_SEARCH_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m"
-      
-      # Настройки для анализа веб-технологий
-      SONAR_CLUSTER_ENABLED: "false"
-      SONAR_FORCEAUTHENTICATION: "false"
-      
-    ports:
-      - "9000:9000"
-    volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_extensions:/opt/sonarqube/extensions
-      - sonarqube_logs:/opt/sonarqube/logs
-    networks:
-      gitlab-network:
-        ipv4_address: 192.168.56.20
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/api/system/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 180s
-    # 🔧 ОПТИМИЗИРОВАННЫЕ РЕСУРСЫ ДЛЯ 4 ЯДЕР
-    mem_limit: 2g        # ⬇️ УМЕНЬШЕНО (было 3g)
-    mem_reservation: 1g  # ⬇️ УМЕНЬШЕНО (было 2g)
-    cpus: 1.0            # ⬇️ УМЕНЬШЕНО (было 2.0)
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 1G
-
-  gitlab-runner:
-    image: gitlab/gitlab-runner:latest
-    container_name: gitlab-runner
-    restart: unless-stopped
-    depends_on:
-      - gitlab
-      - sonarqube
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - gitlab-runner-config:/etc/gitlab-runner
-      - ./runner-cache:/cache
-    networks:
-      gitlab-network:
-        ipv4_address: 192.168.56.30
-    extra_hosts:
-      - "gitlab.localdomain:192.168.56.10"
-      - "sonarqube.localdomain:192.168.56.20"
-    environment:
-      - GODEBUG=netdns=go
-    # 🔧 ОПТИМИЗИРОВАННЫЕ РЕСУРСЫ ДЛЯ 4 ЯДЕР
-    mem_limit: 512m      # ⬇️ УМЕНЬШЕНО (было 1g)
-    cpus: 0.5            # ⬇️ УМЕНЬШЕНО (было 1.0)
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-
-volumes:
-  gitlab_config:
-    driver: local
-  gitlab_logs:
-    driver: local
-  gitlab_data:
-    driver: local
-  gitlab-runner-config:
-    driver: local
-  sonarqube_data:
-    driver: local
-  sonarqube_extensions:
-    driver: local
-  sonarqube_logs:
-    driver: local
-
-networks:
-  gitlab-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 192.168.56.0/24
-          gateway: 192.168.56.1
-EOF
-
-# Настройка hosts файла
-echo "📝 Настройка hosts файла..."
-sudo bash -c 'cat >> /etc/hosts << EOL
-192.168.56.10    gitlab.localdomain
-192.168.56.20    sonarqube.localdomain
-EOL'
-
-# Запуск инфраструктуры
-echo "🐳 Запуск Docker контейнеров..."
-docker-compose up -d
-
-echo "⏳ Ожидание запуска сервисов..."
-sleep 30
-
-# Проверка статуса
-echo "🔍 Проверка статуса сервисов..."
-docker-compose ps
-
-echo ""
-echo "🎉 АВТОМАТИЧЕСКОЕ РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО!"
-echo ""
-echo "📊 ДАЛЬНЕЙШИЕ ДЕЙСТВИЯ:"
-echo "1. Ожидайте полный запуск GitLab (10-15 минут)"
-echo "2. Проверьте статус: docker-compose logs gitlab"
-echo "3. Получите пароль root: docker-compose exec gitlab cat /etc/gitlab/initial_root_password"
-echo "4. Откройте в браузере: http://gitlab.localdomain"
-echo ""
-echo "🚀 Для продолжения выполните: ./setup-gitlab.sh"
-```
-
-Сохраните как `quick-deploy.sh` и выполните:
-```bash
-chmod +x quick-deploy.sh
-./quick-deploy.sh
-```
 
 ---
 
 ## Подготовка окружения
 
-### Оптимизация WSL2 (для пользователей Windows)
+## Оптимизированные настройки WSL2 для 4 ядер / 16GB RAM
 
 ```bash
 #!/bin/bash
@@ -415,6 +195,78 @@ echo "💡 После перезапуска WSL проверьте настро
 echo "   cat /proc/meminfo | grep -i memtotal"
 echo "   nproc"
 ```
+## Скрипт проверки и оптимизации системы
+```bash
+#!/bin/bash
+# system-optimizer.sh
+
+echo "🔧 ОПТИМИЗАЦИЯ СИСТЕМЫ ДЛЯ 4 ЯДЕР / 16GB RAM"
+
+# Проверка текущих ресурсов
+echo "📊 ТЕКУЩИЕ РЕСУРСЫ WSL2:"
+echo "   • Ядра: $(nproc)"
+echo "   • Память: $(grep MemTotal /proc/meminfo | awk '{print int($2/1024/1024)" GB"}')"
+echo "   • Swap: $(grep SwapTotal /proc/meminfo | awk '{print int($2/1024/1024)" GB"}')"
+
+# Проверка использования Docker
+echo ""
+echo "🐳 ИСПОЛЬЗОВАНИЕ DOCKER:"
+docker system df
+
+# Расчет оптимальных значений
+echo ""
+echo "🎯 РАСЧЕТ ОПТИМАЛЬНЫХ НАСТРОЕК:"
+
+TOTAL_MEMORY_GB=15.8
+TOTAL_CORES=4
+
+# Безопасные лимиты (оставляем ресурсы для Windows)
+WSL_MEMORY=10
+WSL_PROCESSORS=3
+WSL_SWAP=4
+
+GITLAB_MEMORY=3
+GITLAB_CPUS=1.5
+
+SONARQUBE_MEMORY=2
+SONARQUBE_CPUS=1.0
+
+RUNNER_MEMORY=0.5
+RUNNER_CPUS=0.5
+
+echo "   WSL2 Конфигурация:"
+echo "   • Память: ${WSL_MEMORY}GB"
+echo "   • Ядра: ${WSL_PROCESSORS}"
+echo "   • Swap: ${WSL_SWAP}GB"
+echo ""
+echo "   Docker Сервисы:"
+echo "   • GitLab: ${GITLAB_MEMORY}GB RAM, ${GITLAB_CPUS} CPU"
+echo "   • SonarQube: ${SONARQUBE_MEMORY}GB RAM, ${SONARQUBE_CPUS} CPU"
+echo "   • Runner: ${RUNNER_MEMORY}GB RAM, ${RUNNER_CPUS} CPU"
+echo ""
+echo "   💡 ОБЩЕЕ ИСПОЛЬЗОВАНИЕ:"
+TOTAL_USED=$((GITLAB_MEMORY + SONARQUBE_MEMORY + RUNNER_MEMORY))
+echo "   • Память: ${TOTAL_USED}GB / ${WSL_MEMORY}GB ($((TOTAL_USED * 100 / WSL_MEMORY))%)"
+echo "   • CPU: $((GITLAB_CPUS + SONARQUBE_CPUS + RUNNER_CPUS)) / ${WSL_PROCESSORS} ядер"
+
+# Проверка текущей конфигурации WSL
+echo ""
+echo "🔍 ПРОВЕРКА ТЕКУЩЕЙ КОНФИГУРАЦИИ WSL:"
+if [ -f "/mnt/c/Users/$USER/.wslconfig" ]; then
+    echo "✅ Файл .wslconfig найден:"
+    grep -E "(memory|processors|swap)" /mnt/c/Users/$USER/.wslconfig
+else
+    echo "❌ Файл .wslconfig не найден"
+fi
+
+# Предложение оптимизации
+echo ""
+echo "🚀 РЕКОМЕНДУЕМЫЕ ДЕЙСТВИЯ:"
+echo "   1. Запустите: ./optimize-wsl2-4core.sh"
+echo "   2. Перезапустите WSL: wsl --shutdown && wsl"
+echo "   3. Обновите docker-compose.yml с новыми настройками"
+echo "   4. Перезапустите сервисы: docker-compose up -d"
+```
 
 ### Создание рабочей директории
 
@@ -458,14 +310,41 @@ grep "192.168.56" $HOSTS_FILE
 
 ## Развертывание инфраструктуры
 
-### Улучшенный docker-compose.yml
+### Обновленный V7 скрипт быстрого развертывания quick-deploy-4core.sh
 
-```yaml
+```bash
+#!/bin/bash
+# quick-deploy-4core.sh
+
+echo "🚀 АВТОМАТИЧЕСКОЕ РАЗВЕРТЫВАНИЕ ДЛЯ 4-ЯДЕРНОЙ СИСТЕМЫ"
+
+set -e
+
+# Проверка ресурсов
+echo "📊 Проверка системных ресурсов..."
+CORES=$(nproc)
+MEMORY_GB=$(grep MemTotal /proc/meminfo | awk '{print int($2/1024/1024)}')
+
+echo "   • Доступно ядер: $CORES"
+echo "   • Доступно памяти: ${MEMORY_GB}GB"
+
+if [ $MEMORY_GB -lt 10 ]; then
+    echo "⚠️  Внимание: Мало памяти. Рекомендуется минимум 10GB для комфортной работы."
+fi
+
+# Создание рабочей директории
+mkdir -p ~/gitlab-setup
+cd ~/gitlab-setup
+
+echo "📥 Создание оптимизированной конфигурации..."
+
+# Создание оптимизированного docker-compose.yml
+cat > docker-compose.yml << 'EOF'
 version: '3.8'
 
 services:
   gitlab:
-    image: gitlab/gitlab-ce:16.5.1-ce.0
+    image: gitlab/gitlab-ce:latest
     container_name: gitlab
     hostname: gitlab.localdomain
     restart: unless-stopped
@@ -473,35 +352,17 @@ services:
       GITLAB_OMNIBUS_CONFIG: |
         external_url 'http://gitlab.localdomain'
         gitlab_rails['gitlab_shell_ssh_port'] = 2224
-        
         # 🔧 ОПТИМИЗАЦИИ ДЛЯ 4-ЯДЕРНОЙ СИСТЕМЫ
         prometheus_monitoring['enable'] = false
-        grafana['enable'] = false
-        puma['worker_processes'] = 2          # ⬇️ УМЕНЬШЕНО (было 2)
-        puma['min_threads'] = 1               # ⬇️ УМЕНЬШЕНО (было 1)
-        puma['max_threads'] = 2               # ⬇️ УМЕНЬШЕНО (было 4)
-        sidekiq['max_concurrency'] = 3        # ⬇️ УМЕНЬШЕНО (было 5)
-        
-        # Настройки для веб-разработки
-        gitlab_rails['gitlab_default_can_create_group'] = 'true'
-        gitlab_rails['time_zone'] = 'Europe/Moscow'
-        
-        # Оптимизации базы данных
-        postgresql['shared_buffers'] = '256MB' # ⬇️ УМЕНЬШЕНО (было 512MB)
-        postgresql['max_connections'] = 100    # ⬇️ УМЕНЬШЕНО (было 200)
-        
-        # Оптимизации Redis
-        redis['maxmemory'] = '128mb'          # ⬇️ УМЕНЬШЕНО (было 256mb)
+        puma['worker_processes'] = 2
+        puma['min_threads'] = 1
+        puma['max_threads'] = 2
+        sidekiq['max_concurrency'] = 3
+        nginx['worker_processes'] = 1
+        nginx['worker_connections'] = 512
+        postgresql['shared_buffers'] = '256MB'
+        redis['maxmemory'] = '128mb'
         redis['maxmemory_policy'] = 'allkeys-lru'
-        
-        # Настройки NGINX
-        nginx['worker_processes'] = 1         # ⬇️ УМЕНЬШЕНО (было 2)
-        nginx['worker_connections'] = 512     # ⬇️ УМЕНЬШЕНО (было 1024)
-        
-        # Отключение неиспользуемых сервисов
-        mattermost['enable'] = false
-        registry['enable'] = false
-        
     ports:
       - "80:80"
       - "443:443"
@@ -519,18 +380,27 @@ services:
       timeout: 10s
       retries: 20
       start_period: 600s
-    # 🔧 ОПТИМИЗИРОВАННЫЕ РЕСУРСЫ ДЛЯ 4 ЯДЕР
-    mem_limit: 3g        # ⬇️ УМЕНЬШЕНО (было 4g)
-    mem_reservation: 2g  # ⬇️ УМЕНЬШЕНО (было 3g)
-    cpus: 1.5            # ⬇️ УМЕНЬШЕНО (было 2.0)
-    deploy:
-      resources:
-        limits:
-          cpus: '1.5'
-          memory: 3G
-        reservations:
-          cpus: '1.0'
-          memory: 2G
+    mem_limit: 3g
+    mem_reservation: 2g
+    cpus: 1.5
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    container_name: gitlab-runner
+    restart: unless-stopped
+    depends_on:
+      - gitlab
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - gitlab-runner-config:/etc/gitlab-runner
+    networks:
+      gitlab-network:
+        ipv4_address: 192.168.56.30
+    extra_hosts:
+      - "gitlab.localdomain:192.168.56.10"
+      - "sonarqube.localdomain:192.168.56.20"
+    mem_limit: 512m
+    cpus: 0.5
 
   sonarqube:
     image: sonarqube:9.9.1-community
@@ -539,19 +409,10 @@ services:
     restart: unless-stopped
     environment:
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-      SONAR_JDBC_URL: ""
-      SONAR_JDBC_USERNAME: ""
-      SONAR_JDBC_PASSWORD: ""
-      
-      # 🔧 ОПТИМИЗАЦИИ ПАМЯТИ ДЛЯ 4-ЯДЕРНОЙ СИСТЕМЫ
-      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC"
+      # 🔧 ОПТИМИЗАЦИИ ДЛЯ 4-ЯДЕРНОЙ СИСТЕМЫ
+      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m"
       SONAR_CE_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m"
       SONAR_SEARCH_JAVAOPTS: "-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m"
-      
-      # Настройки для анализа веб-технологий
-      SONAR_CLUSTER_ENABLED: "false"
-      SONAR_FORCEAUTHENTICATION: "false"
-      
     ports:
       - "9000:9000"
     volumes:
@@ -567,65 +428,18 @@ services:
       timeout: 10s
       retries: 10
       start_period: 180s
-    # 🔧 ОПТИМИЗИРОВАННЫЕ РЕСУРСЫ ДЛЯ 4 ЯДЕР
-    mem_limit: 2g        # ⬇️ УМЕНЬШЕНО (было 3g)
-    mem_reservation: 1g  # ⬇️ УМЕНЬШЕНО (было 2g)
-    cpus: 1.0            # ⬇️ УМЕНЬШЕНО (было 2.0)
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 1G
-
-  gitlab-runner:
-    image: gitlab/gitlab-runner:latest
-    container_name: gitlab-runner
-    restart: unless-stopped
-    depends_on:
-      - gitlab
-      - sonarqube
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - gitlab-runner-config:/etc/gitlab-runner
-      - ./runner-cache:/cache
-    networks:
-      gitlab-network:
-        ipv4_address: 192.168.56.30
-    extra_hosts:
-      - "gitlab.localdomain:192.168.56.10"
-      - "sonarqube.localdomain:192.168.56.20"
-    environment:
-      - GODEBUG=netdns=go
-    # 🔧 ОПТИМИЗИРОВАННЫЕ РЕСУРСЫ ДЛЯ 4 ЯДЕР
-    mem_limit: 512m      # ⬇️ УМЕНЬШЕНО (было 1g)
-    cpus: 0.5            # ⬇️ УМЕНЬШЕНО (было 1.0)
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+    mem_limit: 2g
+    mem_reservation: 1g
+    cpus: 1.0
 
 volumes:
   gitlab_config:
-    driver: local
   gitlab_logs:
-    driver: local
   gitlab_data:
-    driver: local
   gitlab-runner-config:
-    driver: local
   sonarqube_data:
-    driver: local
   sonarqube_extensions:
-    driver: local
   sonarqube_logs:
-    driver: local
 
 networks:
   gitlab-network:
@@ -634,7 +448,41 @@ networks:
       config:
         - subnet: 192.168.56.0/24
           gateway: 192.168.56.1
+EOF
+
+# Настройка hosts файла
+echo "📝 Настройка hosts файла..."
+sudo bash -c 'cat >> /etc/hosts << EOL
+192.168.56.10    gitlab.localdomain
+192.168.56.20    sonarqube.localdomain
+EOL'
+
+# Запуск инфраструктуры
+echo "🐳 Запуск Docker контейнеров..."
+docker-compose up -d
+
+echo "⏳ Ожидание запуска сервисов..."
+sleep 30
+
+# Проверка статуса
+echo "🔍 Проверка статуса сервисов..."
+docker-compose ps
+
+echo ""
+echo "🎉 АВТОМАТИЧЕСКОЕ РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО!"
+echo ""
+echo "📊 ВЫДЕЛЕННЫЕ РЕСУРСЫ:"
+echo "   • GitLab: 3GB RAM, 1.5 CPU"
+echo "   • SonarQube: 2GB RAM, 1.0 CPU" 
+echo "   • Runner: 512MB RAM, 0.5 CPU"
+echo "   • Всего: ~5.5GB RAM, 3.0 CPU"
+echo ""
+echo "💡 ДАЛЬНЕЙШИЕ ДЕЙСТВИЯ:"
+echo "   1. Оптимизируйте WSL2: ./optimize-wsl2-4core.sh"
+echo "   2. Мониторьте запуск: ./wait-gitlab-working.sh"
+echo "   3. Проверьте систему: ./system-check.sh"
 ```
+
 
 ### Запуск инфраструктуры
 
