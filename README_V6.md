@@ -319,8 +319,8 @@ services:
         gitlab_rails['gitlab_default_can_create_group'] = 'false'
         nginx['worker_processes'] = 2
         nginx['worker_connections'] = 1024
-        postgresql['shared_buffers'] = '256MB'
-        redis['maxmemory'] = '128mb'
+        postgresql['shared_buffers'] = '512MB'  # ⬆️ УВЕЛИЧЕНО
+        redis['maxmemory'] = '256mb'           # ⬆️ УВЕЛИЧЕНО
         redis['maxmemory_policy'] = 'allkeys-lru'
     ports:
       - "80:80"
@@ -339,9 +339,9 @@ services:
       timeout: 10s
       retries: 20
       start_period: 600s
-    mem_limit: 3g
-    mem_reservation: 2g
-    cpus: 1.5
+    mem_limit: 4g        # ⬆️ УВЕЛИЧЕНО С 3GB
+    mem_reservation: 3g  # ⬆️ УВЕЛИЧЕНО
+    cpus: 2.0            # ⬆️ УВЕЛИЧЕНО
 
   gitlab-runner:
     image: gitlab/gitlab-runner:latest
@@ -356,24 +356,21 @@ services:
     extra_hosts:
       - "gitlab.localdomain:192.168.56.10"
       - "sonarqube.localdomain:192.168.56.20"
-    mem_limit: 512m
-    cpus: 0.5
+    mem_limit: 1g        # ⬆️ УВЕЛИЧЕНО
+    cpus: 1.0            # ⬆️ УВЕЛИЧЕНО
 
   sonarqube:
-    image: sonarqube:9.9.1-community  # ⚠️ КОНКРЕТНАЯ СТАБИЛЬНАЯ ВЕРСИЯ
+    image: sonarqube:9.9.1-community
     container_name: sonarqube
     hostname: sonarqube.localdomain
     restart: unless-stopped
     environment:
-      # МИНИМАЛЬНЫЕ НАСТРОЙКИ ДЛЯ СТАБИЛЬНОСТИ
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-      SONAR_WEB_JAVAOPTS: "-Xmx512m -Xms128m"
-      SONAR_CE_JAVAOPTS: "-Xmx512m -Xms128m" 
-      SONAR_SEARCH_JAVAOPTS: "-Xmx512m -Xms128m"
-      # Отключаем все ненужное
+      # УВЕЛИЧЕННЫЕ ЛИМИТЫ
+      SONAR_WEB_JAVAOPTS: "-Xmx1g -Xms512m -XX:MaxMetaspaceSize=512m"
+      SONAR_CE_JAVAOPTS: "-Xmx1g -Xms512m -XX:MaxMetaspaceSize=512m"
+      SONAR_SEARCH_JAVAOPTS: "-Xmx1g -Xms512m -XX:MaxMetaspaceSize=512m"
       SONAR_CLUSTER_ENABLED: "false"
-      SONAR_SEARCH_REPLICAS: "1"
-      SONAR_SEARCH_SHARDS: "1"
     ports:
       - "9000:9000"
     volumes:
@@ -389,9 +386,9 @@ services:
       timeout: 10s
       retries: 10
       start_period: 180s
-    mem_limit: 2g  # ⚠️ ДАЕМ БОЛЬШЕ ПАМЯТИ
-    mem_reservation: 1g
-    cpus: 1.0
+    mem_limit: 3g        # ⬆️ УВЕЛИЧЕНО С 2GB
+    mem_reservation: 2g  # ⬆️ УВЕЛИЧЕНО
+    cpus: 2.0            # ⬆️ УВЕЛИЧЕНО
 
 volumes:
   gitlab_config:
